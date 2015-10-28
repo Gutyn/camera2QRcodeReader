@@ -20,6 +20,7 @@ public class MainActivity extends FragmentActivity {
         layout = (RelativeLayout) findViewById(R.id.main_layout);
         if (savedInstanceState == null) {
             FragmentTransaction fragmentTransaction = getFragmentManager().beginTransaction();
+            fragmentTransaction.addToBackStack(null);
             fragmentTransaction.replace(layout.getId(), new FragmentDecoder());
             fragmentTransaction.commit();
         }

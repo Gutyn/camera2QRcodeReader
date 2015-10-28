@@ -2,7 +2,6 @@ package com.qrcodereader;
 
 import android.app.Fragment;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Rect;
@@ -19,26 +18,22 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.v13.app.FragmentCompat;
 import android.util.Log;
 import android.util.Size;
-import android.util.SparseIntArray;
 import android.view.LayoutInflater;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
-import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import com.google.zxing.BinaryBitmap;
-import com.google.zxing.LuminanceSource;
 import com.google.zxing.ReaderException;
 import com.google.zxing.Result;
 import com.google.zxing.common.HybridBinarizer;
@@ -63,13 +58,8 @@ public class FragmentDecoder extends Fragment
         implements FragmentCompat.OnRequestPermissionsResultCallback {
     private static final int sImageFormat = ImageFormat.YUV_420_888;
 
-    /**
-     * Conversion from screen rotation to JPEG orientation.
-     */
-    private static Object mockObjectForLocking = new Object();
-    private boolean processingImage = false;
     private RelativeLayout layout;
-
+    public static boolean accessGranted = true;
 
     /**
      * Tag for the {@link Log}.
@@ -78,7 +68,6 @@ public class FragmentDecoder extends Fragment
 
     private final CameraCaptureSession.CaptureCallback mCaptureCallback =
             new CameraCaptureSession.CaptureCallback() {
-
                 private void process(CaptureResult result) {
                 }
 
@@ -127,15 +116,43 @@ public class FragmentDecoder extends Fragment
     private QRCodeReader mQrReader;
     private String mCameraId;
     private AutoFitTextureView mTextureView;
-    private Object mockObjectForLocking2 = new Object();
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener =
             new ImageReader.OnImageAvailableListener() {
 
                 @Override
                 public void onImageAvailable(ImageReader reader) {
-                    synchronized (mockObjectForLocking2) {
-                        if (processingImage || reader == null) return;
-                        new QrCodeValidator(reader).execute();
+                    Log.e(TAG, "onImageAvailable: " + count++);
+                    Image img = null;
+                    img = reader.acquireLatestImage();
+                    Result rawResult = null;
+                    try {
+                        if (img == null) throw new NullPointerException("cannot be null");
+                        ByteBuffer buffer = img.getPlanes()[0].getBuffer();
+                        byte[] data = new byte[buffer.remaining()];
+                        buffer.get(data);
+                        int width = img.getWidth();
+                        int height = img.getHeight();
+                        PlanarYUVLuminanceSource source = new PlanarYUVLuminanceSource(data, width, height);
+                        BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+                        rawResult = mQrReader.decode(bitmap);
+                        onQRCodeRead(rawResult.getText());
+                    } catch (ReaderException ignored) {
+                        Log.e(TAG, "Reader shows an exception! ", ignored);
+                        /* Ignored */
+                    } catch (NullPointerException ex) {
+                        ex.printStackTrace();
+                    } finally {
+                        mQrReader.reset();
+                        Log.e(TAG, "in the finally! ------------");
+                        if (img != null)
+                            img.close();
+
+                    }
+                    if (rawResult != null) {
+                        Log.e(TAG, "Decoding successful!");
+                    } else {
+                        Log.d(TAG, "No QR code found…");
                     }
                 }
 
@@ -176,6 +193,7 @@ public class FragmentDecoder extends Fragment
     private CaptureRequest.Builder mPreviewRequestBuilder;
     private CaptureRequest mPreviewRequest;
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
+    private int count;
 
     /**
      * Given {@code choices} of {@code Size}s supported by a camera, chooses the smallest one whose
@@ -210,61 +228,32 @@ public class FragmentDecoder extends Fragment
         }
     }
 
-    public static Bitmap renderBitmap(LuminanceSource source) {
-        int width = source.getWidth();
-        int height = source.getHeight();
-        byte[] data = source.getMatrix();
-
-        /*
-        if (cameraManager.isFrontFaced()) {
-            if (cameraManager.isPortraitPreview()) {
-                data = mirrorMatrixVertically(data, width, height);
-            } else {
-                data = mirrorMatrixHorizontally(data, width, height);
-            }
-        }
-        */
-
-        final int[] pixels = new int[width * height];
-
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                int pixel = 0xFF000000 | ((data[x * height + y] & 0xff) * 0x00010101);
-                pixels[x * height + y] = pixel;
-            }
-        }
-
-        final Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
-        return bitmap;
-    }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        Log.e(TAG, "test!   onCreateView: " + savedInstanceState);
 
         View rootView = inflater.inflate(R.layout.fragment_decoder, container, false);
         mQrReader = new QRCodeReader();
 
         mTextureView = new AutoFitTextureView(getActivity());
         layout = (RelativeLayout) rootView.findViewById(R.id.fragment_decoder_layout);
+
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (layout.getChildAt(0) == mTextureView) return;
+                layout.addView(mTextureView, 0);
+                startBackgroundThread();
+            }
+        }, 700);
         return rootView;
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        processingImage = false;
-
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                layout.addView(mTextureView, 0);
-                startBackgroundThread();
-            }
-        }, 500);
-
+        accessGranted = true;
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
@@ -279,9 +268,9 @@ public class FragmentDecoder extends Fragment
 
     @Override
     public void onPause() {
+        Log.e(TAG, "onPause");
         closeCamera();
         stopBackgroundThread();
-        layout.removeView(mTextureView);
         super.onPause();
     }
 
@@ -306,9 +295,8 @@ public class FragmentDecoder extends Fragment
                 List<Size> outputSizes = Arrays.asList(map.getOutputSizes(sImageFormat));
                 Size largest = Collections.max(outputSizes, new CompareSizesByArea());
 
-                mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), sImageFormat, 2);
+                mImageReader = ImageReader.newInstance(largest.getWidth() / 16, largest.getHeight() / 16, sImageFormat, 2);
                 mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
-
                 // Danger, W.R.! Attempting to use too large a preview size could exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
@@ -389,13 +377,17 @@ public class FragmentDecoder extends Fragment
      * Stops the background thread and its {@link Handler}.
      */
     private void stopBackgroundThread() {
-        mBackgroundThread.quitSafely();
         try {
+            mBackgroundThread.quitSafely();
             mBackgroundThread.join();
             mBackgroundThread = null;
             mBackgroundHandler = null;
         } catch (InterruptedException e) {
             e.printStackTrace();
+            mBackgroundThread = null;
+            mBackgroundHandler = null;
+        } catch (NullPointerException ex){
+            ex.printStackTrace();
             mBackgroundThread = null;
             mBackgroundHandler = null;
         }
@@ -411,6 +403,8 @@ public class FragmentDecoder extends Fragment
 
             // We configure the size of default buffer to be the size of camera preview we want.
             texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            Log.e(TAG, "mPreviewSize.getWidth(): " + mPreviewSize.getWidth() + ", mPreviewSize.getHeight(): "
+                    + mPreviewSize.getHeight());
 
             Surface surface = new Surface(texture);
             Surface mImageSurface = mImageReader.getSurface();
@@ -419,7 +413,7 @@ public class FragmentDecoder extends Fragment
             mPreviewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
-            mCameraDevice.createCaptureSession(Arrays.asList(surface, mImageSurface),
+            mCameraDevice.createCaptureSession(Arrays.asList(mImageSurface, surface),
                     new CameraCaptureSession.StateCallback() {
 
                         @Override
@@ -457,7 +451,7 @@ public class FragmentDecoder extends Fragment
     }
 
     /**
-     * Configures the necessary {@link Matrix} transformation to `mTextureView`.
+     * Configures the necessary {@link android.graphics.Matrix} transformation to `mTextureView`.
      * This method should be called after the camera preview size is determined in
      * setUpCameraOutputs and also the size of `mTextureView` is fixed.
      *
@@ -489,7 +483,8 @@ public class FragmentDecoder extends Fragment
 
 
     public void onQRCodeRead(final String text) {
-        synchronized (mockObjectForLocking) {
+        if (accessGranted) {
+            accessGranted = false;
             Intent intent;
             intent = new Intent(getActivity(), ResultActivity.class);
             intent.putExtra("text", text);
@@ -520,83 +515,9 @@ public class FragmentDecoder extends Fragment
                 window.findViewById(Window.ID_ANDROID_CONTENT).getTop();
         int titleBarHeight = contentViewTop - statusBarHeight;
 
+        Log.e(TAG, "StatusBar Height= " + statusBarHeight + " , TitleBar Height = " + titleBarHeight);
         return statusBarHeight + titleBarHeight;
     }
 
-    private class QrCodeValidator extends AsyncTask {
-
-        private ImageReader imageReader;
-        private Result rawResult = null;
-
-        public QrCodeValidator(ImageReader reader) {
-            processingImage = true;
-            imageReader = reader;
-        }
-
-        private QrCodeValidator() {
-        }
-
-        @Override
-        protected Object doInBackground(Object[] params) {
-            Image img = null;
-
-            try {
-                try {
-                    img = imageReader.acquireLatestImage();
-                } catch (Exception ex) {
-                    processingImage = false;
-                    return null;
-                }
-
-                processingImage = true;
-                if (img == null) throw new NullPointerException("cannot be null");
-                ByteBuffer buffer = img.getPlanes()[0].getBuffer();
-                byte[] data = new byte[buffer.remaining()];
-                buffer.get(data);
-                int width = img.getWidth();
-                int height = img.getHeight();
-                PlanarYUVLuminanceSource source = new PlanarYUVLuminanceSource(data, width, height);
-                BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-
-                rawResult = mQrReader.decode(bitmap);
-                onQRCodeRead(rawResult.getText());
-            } catch (ReaderException ignored) {
-                Log.e(TAG, "Reader shows an exception! ", ignored);
-                processingImage = false;
-                        /* Ignored */
-            } catch (NullPointerException ex) {
-                processingImage = false;
-                ex.printStackTrace();
-            } finally {
-                mQrReader.reset();
-                if (img != null)
-                    img.close();
-
-            }
-
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Object o) {
-            super.onPostExecute(o);
-            if (rawResult != null) {
-                try {
-                    if (mCaptureSession != null)
-                        mCaptureSession.stopRepeating();
-                    mCaptureSession = null;
-                    Log.e(TAG, "stopRepeating!!!!!!!! ");
-                } catch (CameraAccessException e) {
-                    e.printStackTrace();
-                    processingImage = false;
-                }
-                processingImage = false;
-                Log.e(TAG, "Decoding successful!");
-            } else {
-                Log.d(TAG, "No QR code found…");
-                processingImage = false;
-            }
-        }
-    }
 
 }
