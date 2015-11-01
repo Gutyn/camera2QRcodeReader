@@ -1,7 +1,7 @@
 package com.qrcodereader;
 
 /**
- * BreadWallet
+ * AutoFitTextureView.class
  * <p/>
  * Created by Mihail on 10/21/15.
  * Copyright (c) 2015 Mihail Gutan <mihail@breadwallet.com>
