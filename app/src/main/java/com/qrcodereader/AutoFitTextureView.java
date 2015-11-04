@@ -3,8 +3,8 @@ package com.qrcodereader;
 /**
  * AutoFitTextureView.class
  * <p/>
- * Created by Mihail on 10/21/15.
- * Copyright (c) 2015 Mihail Gutan <mihail@breadwallet.com>
+ * Created by Mihail on 10/21/15 <mihail@breadwallet.com>.
+ * Copyright (c) 2015 breadwallet llc.
  * <p/>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

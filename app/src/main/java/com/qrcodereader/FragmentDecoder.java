@@ -57,8 +57,8 @@ import static android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE;
 
 /**
  * FragmentDecoder.class
- * Created by Mihail Gutan on 28/10/15.
- * Copyright (c) 2015 Mihail Gutan
+ * Created by Mihail on 28/10/15 <mihail@breadwallet.com>.
+ * Copyright (c) 2015 breadwallet llc.
  * <p/>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
