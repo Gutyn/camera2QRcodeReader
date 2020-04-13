@@ -3,8 +3,8 @@ package com.qrcodereader;
 import android.app.FragmentTransaction;
 import android.graphics.Point;
 import android.os.Bundle;
-import android.support.v4.app.FragmentActivity;
 import android.widget.RelativeLayout;
+import androidx.fragment.app.FragmentActivity;
 
 /**
  * MainActivity.class

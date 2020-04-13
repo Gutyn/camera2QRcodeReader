@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/camera2QRcodeReader.iml" filepath="$PROJECT_DIR$/camera2QRcodeReader.iml" />
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" group="camera2QRcodeReader/app" />
+      <module fileurl="file://$PROJECT_DIR$/camera2QRcodeReader.iml" filepath="$PROJECT_DIR$/camera2QRcodeReader.iml" group="camera2QRcodeReader" />
     </modules>
   </component>
 </project>
